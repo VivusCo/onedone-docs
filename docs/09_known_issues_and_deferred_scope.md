@@ -3,119 +3,138 @@
 ## 1. Purpose
 
 This document separates:
-- implemented MVP scope,
-- production hardening work that is still required,
-- intentionally deferred scope,
-- release blockers vs non-blockers.
+- current implemented MVP runtime,
+- production hardening still required,
+- planned next capabilities not yet implemented,
+- deferred v1.1+ scope.
 
-Use this as a practical boundary reference for planning, implementation prompts, and release decisions.
+Use this as the practical boundary for planning and release decisions.
 
-## 2. Implemented MVP but needs hardening before production
+## 2. Current implementation baseline (for context)
 
-These areas exist in MVP but are not yet complete production-grade solutions.
+Implemented baseline includes:
+- iOS remote runtime by default (mock only for preview/dev fallback).
+- Email/password auth with session restore/logout.
+- Access-state-driven routing and gating.
+- New Task -> Analyze -> Clarification or Task Result flow.
+- My Tasks and Task Detail remote reads.
+- Draft reply and sent-status actions.
+- Reminder sync endpoints with local-notification-first iOS behavior.
+- StoreKit purchase/restore mirrored to backend via `ios_verified_mirror` scaffold.
 
-Subscription scaffold and validation maturity:
-- StoreKit local/TestFlight scaffold works for MVP testing.
-- `ios_verified_mirror` is an MVP/TestFlight scaffold, not full production subscription validation.
-- Local StoreKit flow proves app/backend wiring, but not full Apple production validation guarantees.
-- Real TestFlight/App Store subscription behavior still depends on App Store Connect product setup and production operations.
+## 3. Implemented MVP but still needs production hardening
 
-Auth and account entry hardening:
-- Email/password auth is implemented and used in MVP.
-- Production email confirmation behavior, redirects, and deep-link handling still need final hardening decisions/setup.
-- Sign in with Apple is not currently implemented and may be required before broader/public release depending on release policy.
+Subscription maturity:
+- StoreKit local/TestFlight scaffold works for MVP validation.
+- `ios_verified_mirror` is a scaffold, not full production-grade subscription trust.
+- Real TestFlight/App Store behavior still requires App Store Connect setup and operational validation.
+
+Auth and account hardening:
+- Email/password auth is implemented.
+- Production email confirmation/deep-link behavior still needs final rollout validation.
+- Sign in with Apple is not currently implemented and may be required before broader/public release.
 
 Operational hardening:
-- Monitoring and alerting exist only at MVP level and need production-grade coverage.
-- Error observability is functional but still needs production-oriented dashboards, thresholds, and response playbooks.
-- Rate limits are implemented but may require tuning based on real traffic and support load.
-- Support/admin operational tooling is minimal and should be expanded before large-scale public rollout.
+- Monitoring/alerting and observability need broader production coverage.
+- Rate limits are implemented but may require tuning on real traffic.
+- Support/admin tooling remains minimal.
 
-## 3. Deferred product features
+## 4. Planned next capabilities (not implemented yet)
 
-Deferred or not fully connected in the current MVP runtime:
+Task Intake System is planned next major capability and is not currently implemented.
+
+Not implemented today:
+- Intake sessions (`intake_sessions`-style flow).
+- Dedicated multi-task detection + split-review user flow.
+- Pending-question persistence beyond current clarification loop.
+- "Answer missing details later" intake resume flow.
+- Structured per-item split confirmation before final task creation.
+
+Reference spec (planned source of truth):
+- `docs/15_task_intake_system.md`
+
+## 5. Deferred product features (outside current MVP)
+
+Deferred/not available:
 - Attachments.
-- OCR and PDF upload processing.
-- Incoming reply processing flow in end-user runtime path (not in current connected MVP API surface).
-- Generate follow-up flow in current connected MVP API surface.
-- Advanced template system beyond current MVP set.
-- Multi-task split confirmation flow in current connected MVP API surface.
-- Autonomous external actions.
-- Integrations with external email/calendar/messaging systems.
+- OCR/PDF upload processing.
+- Autonomous external actions (automatic cancellations/payments/sending).
+- External account integrations (email/calendar/messaging providers).
+- Advanced template systems beyond current app-side template set.
 
-## 4. Deferred iOS/platform items
+## 6. Deferred iOS/platform items
 
-Platform items outside current MVP completion:
-- Sign in with Apple implementation if required for public release policy.
-- Final App Store Connect subscription product setup for real TestFlight/App Store subscription testing.
-- Expanded TestFlight sandbox validation across broader account/device scenarios.
-- Push notification production setup (if needed for roadmap; MVP currently relies on local notifications).
-- Production deep links and universal links setup/polish.
-- Accessibility polish beyond current MVP baseline.
-- Offline/cache behavior polish beyond current MVP read-oriented behavior.
+Not complete for broader public rollout:
+- Sign in with Apple (if required by release policy).
+- Final App Store Connect subscription setup and broader TestFlight matrix.
+- Production deep-link/universal-link polish.
+- Accessibility polish beyond current baseline.
+- Offline/cache behavior polish beyond current flow.
 
-## 5. Deferred backend/security items
+## 7. Deferred backend/security items
 
-Backend/security work not completed for public-grade subscription infrastructure and operations:
+Not complete yet:
 - Full Apple Server API validation.
-- App Store Server Notifications pipeline.
-- Production subscription reconciliation workflows.
-- Expanded audit logging strategy where required by operations/compliance.
-- Admin/support tooling for account and subscription incident handling.
-- Advanced analytics and operational insights.
-- Formal data retention policy finalization.
-- Backup/restore policy documentation and validation.
-- Full security review and production hardening pass.
+- App Store Server Notifications ingestion/reconciliation.
+- Full production subscription reconciliation operations.
+- Expanded admin/support operational tooling.
+- Broader production analytics/observability and incident runbooks.
 
-## 6. Known technical caveats
+## 8. Performance status and caveats
 
-Current caveats developers and reviewers must keep in mind:
-- Local StoreKit transaction conflicts can occur across multiple test accounts.
+Optimizations already present in current iOS implementation:
+- Performance-safe repeated list rows (`listRow`-style surfaces/badges).
+- Reduced heavy material/glass usage in repeated rows.
+- Reduced duplicate full-screen background overdraw.
+- Lazy list rendering and shared formatter use in key list/detail screens.
+
+Known remaining risks:
+- Some screens still use layered shadows/overlays that may cost on older hardware.
+- Large text editor + rich card stacks can still be memory-sensitive.
+- Concurrent detail refresh calls can feel bursty on weak networks.
+
+Still required:
+- Manual real-device memory/performance QA across long sessions and slower devices.
+
+## 9. Known technical caveats
+
+Current caveats:
 - Shared Xcode scheme must remain value-free.
-- Concrete runtime env values belong only in local unshared schemes.
-- Mock mode is for previews/development fallback and is not production runtime.
+- Concrete env values belong in local unshared schemes only.
+- Mock mode is not production runtime.
 - `usage_events` must not store raw user content.
-- `ios_verified_mirror` should be treated as MVP/TestFlight scaffolding, not final subscription trust architecture.
-- After updating source docs in `onedone-docs`, synced doc copies in `onedone-ios/docs` and `onedone-backend/docs` should be updated.
+- Checklist toggles in current iOS Task Result/Task Detail behavior are local-only.
+- If docs are updated in `onedone-docs`, synced copies in `onedone-ios/docs` and `onedone-backend/docs` must be refreshed.
 
-## 7. Release blockers vs non-blockers
+## 10. Release blockers vs non-blockers
 
 | Item | Status | Blocks internal MVP? | Blocks TestFlight? | Blocks public App Store? | Notes |
 |---|---|---|---|---|---|
-| Core remote MVP runtime (auth, access-state, AI loop, task reads/actions, reminders) | Implemented | No | No | No | Baseline MVP functionality is running end-to-end. |
-| StoreKit local testing with `OneDone.storekit` | Implemented scaffold | No | No | Yes | Development-only test mechanism; not real production validation. |
-| `ios_verified_mirror` subscription flow | Implemented scaffold | No | No | Yes | Useful for MVP/TestFlight, but not full production subscription trust model. |
-| Full Apple Server API validation | Deferred | No | No | Yes | Required for production-grade server-side subscription validation confidence. |
-| App Store Server Notifications | Deferred | No | No | Yes | Needed for robust background subscription state changes and reconciliation. |
-| App Store Connect subscription product setup | Pending setup | No | Yes | Yes | Required for real TestFlight/App Store purchase lifecycle testing. |
-| Email confirmation/deep-link production setup | Pending setup | No | Conditional | Yes | Public release requires finalized production auth-entry behavior. |
-| Sign in with Apple | Deferred/decision pending | No | Conditional | Conditional | Required status depends on release policy and distribution requirements. |
-| Attachments/OCR/PDF features | Deferred | No | No | No | Explicitly out of MVP scope. |
-| Incoming reply processing runtime path | Not in current connected MVP surface | No | No | No | Track as post-MVP integration scope if required. |
-| Generate follow-up runtime path | Not in current connected MVP surface | No | No | No | Track as post-MVP integration scope if required. |
-| Multi-task split confirmation runtime path | Not in current connected MVP surface | No | No | No | Current MVP centers on primary task flow without full split confirmation path. |
-| Monitoring/error observability hardening | Partial | No | No | Yes | Strongly recommended before broad public exposure and support load. |
-| Support/admin tools | Minimal | No | No | Yes | Needed for production operations and issue response. |
-| Shared scheme value-free policy enforcement | Required policy | No | Yes | Yes | Prevents accidental leakage of concrete env values into shared config. |
-| `usage_events` raw-content safety rule | Required policy | No | No | Yes | Must remain enforced for privacy and compliance posture. |
+| Core remote runtime (auth/access/task/reminder/reply) | Implemented | No | No | No | Working baseline is present. |
+| StoreKit local testing scaffold | Implemented scaffold | No | No | Yes | Dev/testing scaffold only. |
+| `ios_verified_mirror` subscription mode | Implemented scaffold | No | No | Yes | Not full production validation model. |
+| Full Apple Server API validation | Deferred | No | No | Yes | Required for strong production subscription validation. |
+| App Store Server Notifications | Deferred | No | No | Yes | Needed for robust subscription lifecycle reconciliation. |
+| App Store Connect subscription setup | Pending setup | No | Yes | Yes | Needed for real purchase lifecycle testing. |
+| Task Intake System (sessions/split/pending answers) | Planned next capability | No | No | No | Not required for current MVP but not implemented yet. |
+| Attachments/OCR/PDF | Deferred | No | No | No | Explicitly outside current MVP. |
+| Real-device performance verification | In progress | No | Yes | Yes | Must complete before broader release confidence. |
+| Sensitive log safety validation | Required | No | Yes | Yes | Must verify no tokens/password/raw content leaks. |
 
-## 8. Recommended next roadmap
+## 11. Recommended next roadmap
 
-Before TestFlight:
-1. Verify hosted Supabase deployment parity (migrations, functions, RLS).
-2. Execute full end-to-end QA on real device and simulator.
-3. Confirm App Store Connect subscription product setup and test account strategy.
-4. Validate shared-scheme hygiene and local unshared env setup across team machines.
+Before TestFlight confidence signoff:
+1. Complete hosted env parity checks (migrations/functions/RLS/secrets).
+2. Run full real-device QA for auth/session, StoreKit, reminders, and performance.
+3. Validate log safety and scheme hygiene across team setups.
 
 Before public App Store release:
 1. Implement full Apple Server API validation.
-2. Implement App Store Server Notifications and subscription reconciliation.
-3. Finalize production auth entry details (email confirmation/deep links) and Sign in with Apple decision.
-4. Expand production observability, incident handling, and support/admin tooling.
-5. Run full security review and retention/audit policy checks.
+2. Implement App Store Server Notifications pipeline.
+3. Finalize auth-entry production details (including Sign in with Apple decision).
+4. Expand observability and support/admin tooling.
 
 Post-MVP v1.1:
-1. Add attachments/OCR/PDF flows.
-2. Decide and implement incoming-reply and follow-up generation runtime extensions.
-3. Expand templates and multi-task split workflows.
-4. Evaluate integrations with external communication/calendar systems while preserving guided self-service boundaries.
+1. Implement Task Intake System planned capabilities.
+2. Add attachments/OCR/PDF flows.
+3. Expand split/task-composition experiences after intake foundation is shipped.
