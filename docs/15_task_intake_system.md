@@ -52,7 +52,7 @@ Result state:
 ### Scenario B — Single task with missing details
 
 Input example:
-- "Help me cancel my internet bill."
+- "Help me cancel my internet service."
 
 Needed vs helpful details:
 - Needed details: facts that change next action (for example, provider name, cancellation channel available, deadline risk).
@@ -60,7 +60,8 @@ Needed vs helpful details:
 
 AI classification:
 - `intake_type: single`
-- `readiness_state: needs_details` (or `can_start_with_limited_details` for partial-output cases)
+- `readiness_state: needs_details` is the default when required details are missing.
+- `readiness_state: can_start_with_limited_details` is allowed only when backend rules confirm missing details do not block a useful first result.
 - One candidate task plus missing questions.
 
 Clarification screen behavior:
@@ -99,12 +100,16 @@ Split Review behavior:
 - Each item displays readiness (`ready` or `needs_details`).
 
 Per-item routing:
-- Ready items: create task records and continue to result generation.
-- Needs-details items: create intake-backed task entries with pending questions preserved.
+- Ready items: create task records and continue to result generation only after split confirmation.
+- Needs-details items: keep intake-backed candidate entries with pending questions preserved until confirmation.
 
 Preserve questions for incomplete items:
 - Questions stay attached per item.
 - User can answer later item-by-item.
+
+Split persistence rule:
+- During `split_review`, store only `intake_items` as candidates.
+- Do not create final task records before the user confirms the split.
 
 Future support (out of v1 implementation scope):
 - Edit candidate text before create.
@@ -117,12 +122,14 @@ Future support (out of v1 implementation scope):
 |---|---|---|---|---|
 | `ready` | Enough detail to produce strong next step now | `Ready` | Create/update task and trigger result generation | Route to result flow |
 | `needs_details` | Missing required details that block strong output | `Needs details` | Store pending questions, defer full generation | Route to clarification; show resume-later actions |
-| `can_start_with_limited_details` | Can produce a provisional result now, but quality improves with key details | `Can start now` + `More details improve this` | Generate limited result and keep pending questions | Show result with `Answer missing details` action |
+| `can_start_with_limited_details` | Can produce a provisional first result only when missing details are non-blocking | `Can start now` + `More details improve this` | Generate limited result, keep pending questions, and require follow-up for quality improvement | Show provisional result with `Answer missing details` action |
 | `split_review` | Input contains multiple candidate tasks requiring user confirmation | `Review tasks` | Store candidates, wait for split confirmation | Route to split review screen |
 
 Notes:
 - State evaluation comes from AI output but is enforced by backend product rules.
 - Backend must normalize invalid or conflicting state output.
+- `can_start_with_limited_details` is not a default skip route.
+- If needed questions are still blocking, clarification remains the primary route.
 
 ## 4. Missing details model
 
@@ -141,6 +148,16 @@ Rules:
 Practical limits:
 - Prefer one question at a time in UI.
 - Keep wording plain and scenario-specific.
+
+Question quality guardrails:
+- Questions must be concrete, short, and directly answerable.
+- Avoid abstract or generic prompts (for example, "Can you share more context?").
+- Ask only if the answer changes next step quality or output quality.
+
+UI display rules by importance:
+- `needed` -> show as the primary clarification card/input.
+- `helpful` -> show as compact chip or expandable row.
+- `nice_to_have` -> hidden in v1 unless user explicitly requests deeper refinement.
 
 ## 5. AI responsibilities
 
@@ -175,11 +192,13 @@ Backend should:
 - Support idempotency on intake submission and answer submission.
 - Re-run or update result generation after detail answers are provided.
 - Preserve intake context if the user leaves and returns later.
+- For `split_review`, persist candidates first and delay final task creation until user confirmation.
 
 Deterministic enforcement examples:
 - Clamp question counts beyond limits.
 - Downgrade unsupported answer types to safe defaults.
 - Fallback to `needs_details` if AI output is low-confidence/invalid.
+- Reject or hold split candidates when confirmation payload is missing or inconsistent.
 
 ## 7. iOS app responsibilities
 
@@ -187,6 +206,9 @@ iOS should:
 - Show analyzing state after intake submission.
 - Route to result, clarification, or split review based on backend response.
 - Render missing questions with appropriate controls.
+- Render `needed` questions as primary clarification inputs.
+- Render `helpful` questions as compact secondary controls.
+- Keep `nice_to_have` hidden in v1 unless user explicitly requests more refinement.
 - Allow answering now or later.
 - Persist and display `Needs details` status in My Tasks.
 - Show `Answer missing details` from Task Detail and Task Result when applicable.
@@ -268,6 +290,11 @@ Suggested result/output fields:
 - `generated_from_answers_at` (timestamp, nullable)
 - `missing_details_snapshot_json` (jsonb, optional for explainability)
 
+Migration note:
+- This proposed model requires a separate migration plan before implementation.
+- Migration planning should map these entities onto existing task/result/reminder/checklist structures.
+- Rollout should include compatibility handling for existing tasks without intake metadata.
+
 ## 9. Suggested API endpoints
 
 These are draft endpoint contracts for design and planning.
@@ -292,6 +319,7 @@ Output (draft):
 Behavior:
 - Validates AI output and applies product rules.
 - Persists session/items/questions before response.
+- If routing is `split_review`, stores candidates only and does not create final task records yet.
 
 Error handling notes:
 - `invalid_request`
@@ -342,7 +370,7 @@ Output (draft):
 - `discarded_items[]`
 
 Behavior:
-- Creates ready tasks.
+- Creates ready tasks only for user-confirmed candidates.
 - Preserves needs-details items and questions for later completion.
 
 Error handling notes:
@@ -530,6 +558,13 @@ AI output must be structured JSON only.
 - Primary action: `Answer missing details`.
 - No restart required.
 
+### Flow 7 — Fallback when analysis fails or output is invalid
+
+- If analysis is unavailable or AI output is invalid, preserve the raw input text.
+- Show a calm fallback state with `Retry` and `Save for later` actions.
+- Keep the request resumable from My Tasks or intake history.
+- Avoid technical error copy in user-facing UI.
+
 Suggested user-facing copy:
 - "One detail will help"
 - "A few details are needed"
@@ -546,17 +581,22 @@ Copy to avoid:
 ## 12. Product rules and guardrails
 
 Recommended v1 limits:
-- Max needed questions per item: `3`
+- Max needed questions per item: `1-2`
 - Max helpful questions per item: `2`
-- Max nice-to-have questions per item: `1` (prefer `0` in v1)
+- Max nice-to-have questions per item: `0` in v1
+- Max visible questions in first clarification: `3`
 - Max task candidates per intake (phase-2 launch): `5`
 
 Guardrails:
 - Do not ask for sensitive details unless directly required for task execution guidance.
 - Do not over-question the user.
+- Keep every question concrete, short, and directly answerable.
+- Avoid generic prompts that do not change action quality.
 - If confidence is low or output invalid, fall back safely to constrained clarification.
 - Do not create tasks from ambiguous multi-task input before split confirmation.
 - Ensure idempotency on create/update endpoints.
+- Treat `can_start_with_limited_details` as an exception path, not a default path.
+- If needed details are blocking, use clarification first.
 
 Confidence handling (draft):
 - High confidence + ready -> create and generate.
@@ -567,6 +607,7 @@ Invalid AI output fallback:
 - Reject malformed output.
 - Log sanitized diagnostics.
 - Return deterministic fallback response with minimal clarification set.
+- Preserve raw input and provide retry/save-later UI paths without technical error language.
 
 ## 13. Analytics
 
@@ -604,6 +645,13 @@ Deliver:
 - Pending questions persisted.
 - Resume and answer later without restart.
 
+Not in Phase 1:
+- Multi-task split flow.
+- Edit/merge/split candidate tooling.
+- Result version UI.
+- Learned task archetypes.
+- Nice-to-have questions.
+
 ### Phase 2
 
 Deliver:
@@ -636,4 +684,3 @@ Product and technical questions to resolve:
 - What is the exact screen pattern for answering questions later from Task Detail vs Task Result?
 - Should helpful questions remain visible after a complete result is generated?
 - What retry/backoff policy should apply when answer submission triggers generation failures?
-
