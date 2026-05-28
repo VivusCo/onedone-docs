@@ -1,5 +1,14 @@
 # OneDone Task Intake System Specification
 
+Status:
+- Planned next major capability.
+- Not implemented in current iOS/backend runtime as of 2026-05-28.
+- This document is a future implementation source of truth, not a statement of shipped behavior.
+
+Current implementation boundary:
+- Current app/backend supports New Task -> analyze -> clarification/result in the existing loop.
+- Dedicated intake sessions, split-review flow, and pending-question resume-later intake model are not implemented yet.
+
 ## 1. Purpose
 
 The Task Intake System is the product capability that turns messy user input into a deterministic next step.
